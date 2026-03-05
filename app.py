@@ -1,109 +1,138 @@
 from flask import Flask, render_template, request, send_file
 import joblib
+import numpy as np
 import os
-
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import A4
 
 app = Flask(__name__)
+
+# load trained model
 model = joblib.load("model.pkl")
 
-@app.route('/')
+# create reports folder if not exists
+if not os.path.exists("reports"):
+    os.makedirs("reports")
+
+
+@app.route("/")
 def home():
     return render_template("index.html")
 
-@app.route('/generate', methods=['POST'])
-def generate():
 
-    # Get form data
-    age = request.form['age']
-    gender = request.form['gender']
-    height = request.form['height']
-    weight = request.form['weight']
-    blood_group = request.form['blood_group']
-    bp = request.form['bp']
-    temp = request.form['temp']
+@app.route("/predict", methods=["POST"])
+def predict():
 
-    # AI Prediction
-    prediction = model.predict([[float(age), float(bp)]])
-    diagnosis = prediction[0]
+    # Patient Details
+    age = int(request.form["age"])
+    gender = int(request.form["gender"])
+    height = float(request.form["height"])
+    weight = float(request.form["weight"])
 
-    # Save PDF inside temporary file
-    pdf_path = "report.pdf"
-    pdf = SimpleDocTemplate(pdf_path, pagesize=A4)
-    elements = []
+    # Symptoms
+    fever = int(request.form["fever"])
+    cough = int(request.form["cough"])
+    chest_pain = int(request.form["chest_pain"])
+    headache = int(request.form["headache"])
+    nausea = int(request.form["nausea"])
+    fatigue = int(request.form["fatigue"])
+
+    # Vital Signs
+    bp = float(request.form["bp"])
+    temp = float(request.form["temp"])
+    oxygen = float(request.form["oxygen"])
+    heart_rate = float(request.form["heart_rate"])
+
+    # Lab Results
+    sugar = float(request.form["sugar"])
+    hb = float(request.form["hb"])
+    wbc = float(request.form["wbc"])
+    platelets = float(request.form["platelets"])
+    chol = float(request.form["chol"])
+    creat = float(request.form["creat"])
+
+    # ML model input
+    features = np.array([[age, gender, height, weight, fever, cough, chest_pain,
+                          headache, nausea, fatigue, bp, temp, oxygen,
+                          heart_rate, sugar, hb, wbc, platelets, chol, creat]])
+
+    prediction = model.predict(features)
+
+    # convert prediction to text
+    diagnosis = "Heart Disease Risk" if prediction[0] == 1 else "No Heart Disease Risk"
+
+    generate_report(age, gender, height, weight,
+                    fever, cough, chest_pain, headache, nausea, fatigue,
+                    bp, temp, oxygen, heart_rate,
+                    sugar, hb, wbc, platelets, chol, creat,
+                    diagnosis)
+
+    return send_file("reports/report.pdf", as_attachment=True)
+
+
+def generate_report(age, gender, height, weight,
+                    fever, cough, chest_pain, headache, nausea, fatigue,
+                    bp, temp, oxygen, heart_rate,
+                    sugar, hb, wbc, platelets, chol, creat,
+                    diagnosis):
 
     styles = getSampleStyleSheet()
+    story = []
 
-    # Title
-    elements.append(Paragraph("<b>EVERGREEN WELLNESS HOSPITAL</b>", styles["Heading1"]))
-    elements.append(Spacer(1, 0.3 * inch))
+    story.append(Paragraph("AI MEDICAL REPORT", styles['Title']))
+    story.append(Spacer(1, 20))
 
-    elements.append(Paragraph("<b>MEDICAL REPORT</b>", styles["Heading2"]))
-    elements.append(Spacer(1, 0.5 * inch))
+    # Patient Details
+    story.append(Paragraph("<b>Patient Details</b>", styles['Heading2']))
+    story.append(Paragraph(f"Age: {age}", styles['Normal']))
+    story.append(Paragraph(f"Gender: {gender}", styles['Normal']))
+    story.append(Paragraph(f"Height: {height}", styles['Normal']))
+    story.append(Paragraph(f"Weight: {weight}", styles['Normal']))
+    story.append(Spacer(1, 15))
 
-    # Patient Information Table
-    patient_data = [
-        ["Age", age],
-        ["Gender", gender],
-        ["Height", height],
-        ["Weight", weight],
-        ["Blood Group", blood_group],
-    ]
+    # Symptoms
+    story.append(Paragraph("<b>Symptoms</b>", styles['Heading2']))
+    story.append(Paragraph(f"Fever: {fever}", styles['Normal']))
+    story.append(Paragraph(f"Cough: {cough}", styles['Normal']))
+    story.append(Paragraph(f"Chest Pain: {chest_pain}", styles['Normal']))
+    story.append(Paragraph(f"Headache: {headache}", styles['Normal']))
+    story.append(Paragraph(f"Nausea: {nausea}", styles['Normal']))
+    story.append(Paragraph(f"Fatigue: {fatigue}", styles['Normal']))
+    story.append(Spacer(1, 15))
 
-    patient_table = Table(patient_data, colWidths=[2*inch, 3*inch])
-    patient_table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ('FONTSIZE', (0,0), (-1,-1), 11),
-    ]))
+    # Vital Signs
+    story.append(Paragraph("<b>Vital Signs</b>", styles['Heading2']))
+    story.append(Paragraph(f"Blood Pressure: {bp}", styles['Normal']))
+    story.append(Paragraph(f"Temperature: {temp}", styles['Normal']))
+    story.append(Paragraph(f"Oxygen Level: {oxygen}", styles['Normal']))
+    story.append(Paragraph(f"Heart Rate: {heart_rate}", styles['Normal']))
+    story.append(Spacer(1, 15))
 
-    elements.append(Paragraph("<b>Patient Information</b>", styles["Heading3"]))
-    elements.append(Spacer(1, 0.2 * inch))
-    elements.append(patient_table)
-    elements.append(Spacer(1, 0.5 * inch))
+    # Lab Results
+    story.append(Paragraph("<b>Laboratory Results</b>", styles['Heading2']))
+    story.append(Paragraph(f"Blood Sugar: {sugar}", styles['Normal']))
+    story.append(Paragraph(f"Hemoglobin: {hb}", styles['Normal']))
+    story.append(Paragraph(f"WBC Count: {wbc}", styles['Normal']))
+    story.append(Paragraph(f"Platelets: {platelets}", styles['Normal']))
+    story.append(Paragraph(f"Cholesterol: {chol}", styles['Normal']))
+    story.append(Paragraph(f"Creatinine: {creat}", styles['Normal']))
+    story.append(Spacer(1, 15))
 
-    # Vital Signs Table
-    vital_data = [
-        ["Blood Pressure", bp],
-        ["Body Temperature", temp],
-    ]
+    # AI Diagnosis
+    story.append(Paragraph("<b>AI Diagnosis</b>", styles['Heading2']))
+    story.append(Paragraph(f"Result: {diagnosis}", styles['Normal']))
+    story.append(Spacer(1, 15))
 
-    vital_table = Table(vital_data, colWidths=[2*inch, 3*inch])
-    vital_table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ('FONTSIZE', (0,0), (-1,-1), 11),
-    ]))
+    # Recommendation
+    story.append(Paragraph("<b>Recommendation</b>", styles['Heading2']))
+    story.append(Paragraph("Please consult a certified doctor for further medical evaluation.", styles['Normal']))
+    story.append(Spacer(1, 20))
 
-    elements.append(Paragraph("<b>Vital Signs</b>", styles["Heading3"]))
-    elements.append(Spacer(1, 0.2 * inch))
-    elements.append(vital_table)
-    elements.append(Spacer(1, 0.5 * inch))
+    story.append(Paragraph("Doctor Signature: ____________________", styles['Normal']))
 
-    # Diagnosis
-    elements.append(Paragraph("<b>Diagnosis</b>", styles["Heading3"]))
-    elements.append(Spacer(1, 0.2 * inch))
-
-    diagnosis_text = f"""
-    Based on the clinical inputs and AI analysis,
-    the predicted condition is: <b>{diagnosis}</b>.
-    """
-
-    elements.append(Paragraph(diagnosis_text, styles["Normal"]))
-    elements.append(Spacer(1, 1 * inch))
-
-    elements.append(Paragraph("Doctor Signature: ____________________", styles["Normal"]))
-
-    # Build PDF
-    pdf.build(elements)
-
-    # Send file to user for download
-    return send_file(pdf_path, as_attachment=True)
+    doc = SimpleDocTemplate("reports/report.pdf")
+    doc.build(story)
 
 
-# IMPORTANT FOR RENDER
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
